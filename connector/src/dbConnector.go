@@ -1,14 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"gopkg.in/yaml.v2"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -16,20 +15,19 @@ import (
 	"time"
 )
 
-const config_file = "config.yaml"
+const configFile = "config.yaml"
 
 type Record struct {
 	RecordIdentifier string `json:"recordIdentifier"`
 }
 
 type RecordsList struct {
-	Records []Record `json:"record"`
-}
+	InnerRecordsList struct {
+		Records []Record `json:"record"`
+	} `json:"records"`
 
-type RecordsSuperList struct {
-	RList              RecordsList `json:"records"`
-	NumberOfRecords    int         `json:"numberOfRecords"`
-	NextRecordPosition int         `json:"nextRecordPosition"`
+	NumberOfRecords    int `json:"numberOfRecords"`
+	NextRecordPosition int `json:"nextRecordPosition"`
 }
 
 type Config struct {
@@ -43,12 +41,13 @@ type Config struct {
 	} `yaml:"connection"`
 
 	Output struct {
-		OutputDir string `yaml:"output_dir"`
+		OutputDir  string `yaml:"common_dir"`
+		SamplesDir string `yaml:"samples_dir"`
 	} `yaml:"output"`
 
 	Auth struct {
-		ASPXAUTH         string `yaml:".ASPXAUTH"`
-		ASPNET_SessionId string `yaml:"ASP.NET_SessionId"`
+		ASPXAUTH        string `yaml:".ASPXAUTH"`
+		ASPNETSessionId string `yaml:"ASP.NET_SessionId"`
 	}
 }
 
@@ -106,55 +105,6 @@ func NewConfig(configPath string) (*Config, error) {
 	return *rsp.Cookies()[0]
 }*/
 
-func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path string) {
-
-	defer func() {
-		if recover() != nil {
-			log.Println("Failed to download " + url)
-			os.Remove(path)
-		}
-	}()
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, cookie := range cookies {
-		req.AddCookie(&cookie)
-	}
-
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, bt")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Connection", "keep-alive")
-
-	rsp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-
-	if rsp.StatusCode != http.StatusOK {
-		log.Println("Failed to download " + url + " Code: " + rsp.Status)
-		return
-	}
-
-	file, err := os.Create(path)
-	if err != nil {
-		panic(1)
-	}
-	defer file.Close()
-
-	data, err := ioutil.ReadAll(rsp.Body)
-	if err != nil {
-		panic(1)
-	}
-
-	file.Write(data)
-
-	log.Println(url + " downloaded")
-}
-
 func getHref(data []byte) string {
 
 	defer func() {
@@ -171,40 +121,24 @@ func getHref(data []byte) string {
 	return href
 }
 
-func main() {
-	logFile, err := os.OpenFile("connector.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	defer logFile.Close()
-
-	mw := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(mw)
-
-	config, err := NewConfig(config_file)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	url := config.Connection.Url + config.Connection.DB
+func downloadRecords(config *Config, client *http.Client) {
+	connectUrl := config.Connection.Url + config.Connection.DB
 	aspxauth := config.Auth.ASPXAUTH
-	sessionId := config.Auth.ASPNET_SessionId
+	sessionId := config.Auth.ASPNETSessionId
 
 	var cookies [2]http.Cookie
 	cookies[0] = http.Cookie{Name: ".ASPXAUTH", Value: aspxauth}
 	cookies[1] = http.Cookie{Name: "ASP.NET_SessionId", Value: sessionId}
 
-	spaceClient := http.Client{
-		Timeout: time.Second * 2, // Timeout after 2 seconds
-	}
-
-	commonPath := path.Join(".", config.Output.OutputDir)
+	commonPath := path.Join(".", config.Output.OutputDir, config.Connection.DB)
 	jsonPath := path.Join(commonPath, "jsons")
 	pdfPath := path.Join(commonPath, "pdfs")
+	logPath := path.Join(commonPath, "log")
 
 	os.Mkdir(commonPath, os.ModePerm)
 	os.Mkdir(jsonPath, os.ModePerm)
 	os.Mkdir(pdfPath, os.ModePerm)
+	os.Mkdir(logPath, os.ModePerm)
 
 	f, err := os.Create(path.Join(commonPath, "id_list.csv"))
 	if err != nil {
@@ -212,12 +146,12 @@ func main() {
 	}
 	defer f.Close()
 
-	n := 1
-	max_downloads := config.Connection.DownloadListMaxsize
+	n := 0
+	maxDownloads := config.Connection.DownloadListMaxsize
 
-	for n < max_downloads {
+	for n < maxDownloads {
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequest(http.MethodGet, connectUrl, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -230,114 +164,153 @@ func main() {
 			q.Add("fcq", config.Connection.Fcq)
 		}
 		q.Add("maximumRecords", strconv.Itoa(config.Connection.DownloadBatchSize))
-		q.Add("startRecord", strconv.Itoa(n))
-
+		q.Add("startRecord", strconv.Itoa(n+1))
 		req.URL.RawQuery = q.Encode()
 
-		res, getErr := spaceClient.Do(req)
-		if getErr != nil {
-			log.Fatal(getErr)
+		data, err := downloadJson(client, req, path.Join(logPath, "records_list-log"+strconv.Itoa(n)+".json"))
+		if err != nil {
+			log.Fatal(err)
 		}
 
-		if res.Body != nil {
-			defer res.Body.Close()
-		}
-
-		data, readErr := ioutil.ReadAll(res.Body)
-		if readErr != nil {
-			log.Fatal(readErr)
-		}
-
-		rl := RecordsSuperList{}
+		rl := RecordsList{}
 
 		err = json.Unmarshal(data, &rl)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 
-		if rl.NumberOfRecords < max_downloads {
-			max_downloads = rl.NumberOfRecords
+		if rl.NumberOfRecords < maxDownloads {
+			maxDownloads = rl.NumberOfRecords
 		}
-		log.Println(fmt.Sprintf("Start to download [%d-%d]/%d", n-1, n-1+config.Connection.DownloadBatchSize, max_downloads))
 
-		for _, val := range rl.RList.Records {
-			//TODO: use "encoding/csv"
-			f.Write([]byte(strconv.Itoa(n)))
-			f.Write([]byte(","))
-			f.Write([]byte(val.RecordIdentifier))
+		log.Println(fmt.Sprintf("Start to download [%d-%d]/%d", n+1, n+len(rl.InnerRecordsList.Records), maxDownloads))
 
-			jsonFile, err := os.Create(path.Join(jsonPath, strconv.Itoa(n)+".json"))
+		for _, val := range rl.InnerRecordsList.Records {
+			n += 1
+
+			downloadUrl := connectUrl + "/" + url.PathEscape(val.RecordIdentifier)
+
+			req, err := http.NewRequest(http.MethodGet, downloadUrl, nil)
 			if err != nil {
-				panic(err)
-			}
-			defer jsonFile.Close()
-
-			newURL := url + "/" + strings.ReplaceAll(val.RecordIdentifier, "\\", "%5C")
-
-			req, err := http.NewRequest(http.MethodGet, newURL, nil)
-			if err != nil {
-				panic(err)
+				log.Fatal(err)
 			}
 
 			req.Header.Set("Accept", "application/json")
 
 			q := req.URL.Query()
 			q.Add("recordSchema", "gost-7.0.100")
-
 			req.URL.RawQuery = q.Encode()
 
-			res, err := spaceClient.Do(req)
+			jsonData, err := downloadJson(client, req, path.Join(jsonPath, strconv.Itoa(n)+".json"))
 			if err != nil {
 				log.Println(err)
 				continue
 			}
 
-			if res.Body != nil {
-				defer res.Body.Close()
-			}
+			//TODO: use "encoding/csv"
+			f.Write([]byte(strconv.Itoa(n)))
+			f.Write([]byte(","))
+			f.Write([]byte(val.RecordIdentifier))
 
-			data, err := ioutil.ReadAll(res.Body)
-			if err != nil {
-				log.Println(err)
-				continue
-
-			}
-
-			//TODO: without double memory
-			var prettyJSON bytes.Buffer
-			err = json.Indent(&prettyJSON, data, "", "\t")
-			_, err = jsonFile.Write(prettyJSON.Bytes())
-			if err != nil {
-				log.Println(err)
-				os.Remove(jsonFile.Name())
-			} else {
-				log.Println(fmt.Sprintf("json file \"%s\" writed", jsonFile.Name()))
-			}
-
-			rl := RecordsSuperList{}
-
-			err = json.Unmarshal(data, &rl)
-			if err != nil {
-				panic(err)
-			}
-
-			href := getHref(data)
+			href := getHref(jsonData)
 
 			if href != "" {
 				splitedHref := strings.Split(href, "/")
 				pdfName := splitedHref[len(splitedHref)-1]
 
 				f.Write([]byte(","))
-				f.Write([]byte(pdfName + "\n"))
+				f.Write([]byte(pdfName))
 
-				downloadFile(&spaceClient, cookies, href+"/download", path.Join(pdfPath, pdfName))
+				downloadFile(client, cookies, href+"/download", path.Join(pdfPath, pdfName))
 			} else {
-				fmt.Println("Failed to get href")
+				log.Println("Failed to get href")
 			}
 
-			n += 1
+			f.Write([]byte("\n"))
 		}
 
-		log.Println(fmt.Sprintf("Downloaded %d/%d", n-1, max_downloads))
+		log.Println(fmt.Sprintf("Downloaded %d/%d. Next record number is %d", n, maxDownloads, rl.NextRecordPosition))
 	}
+}
+
+func downloadSamples(config *Config, client *http.Client) {
+	connectUrl := config.Connection.Url
+
+	commonPath := path.Join(".", config.Output.OutputDir, config.Output.SamplesDir)
+	os.Mkdir(config.Output.OutputDir, os.ModePerm)
+	os.Mkdir(commonPath, os.ModePerm)
+
+	req, err := http.NewRequest("PROPFIND", connectUrl, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	data, err := downloadJson(client, req, path.Join(commonPath, "db_list"+".json"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(data, &result)
+
+	dbList := result["response"].([]interface{})
+
+	for _, db := range dbList {
+		href := db.(map[string]interface{})["href"].([]interface{})[0].(string)
+		splitedHref := strings.Split(href, "/")
+		dbName := splitedHref[len(splitedHref)-1]
+
+		dbPath := path.Join(commonPath, dbName)
+		os.Mkdir(dbPath, os.ModePerm)
+
+		if dbName == "db" {
+			continue
+		}
+
+		req, err := http.NewRequest(http.MethodGet, href, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		req.Header.Set("Accept", "application/json")
+
+		_, err = downloadJson(client, req, path.Join(dbPath, "db_index"+".json"))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		//TODO: without config editing
+		config.Output.OutputDir = commonPath
+		config.Connection.DB = dbName
+		config.Connection.Query = "(bib.volume=*)"
+		config.Connection.DownloadListMaxsize = 2
+		config.Connection.DownloadBatchSize = 2
+
+		downloadRecords(config, client)
+	}
+}
+
+func main() {
+	logFile, err := os.OpenFile("connector.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, os.ModePerm)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer logFile.Close()
+
+	mw := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(mw)
+
+	config, err := NewConfig(configFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	spaceClient := http.Client{
+		Timeout: time.Second * 2, // Timeout after 2 seconds
+	}
+
+	//downloadRecords(config, &spaceClient)
+	downloadSamples(config, &spaceClient)
 }

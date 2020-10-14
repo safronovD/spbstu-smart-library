@@ -3,10 +3,11 @@ connection:
   db: "EBOOKS"
   query: "(dc.type=\"Academic thesis\")and(dc.language=rus)"
   fcq:
-  download_list_maxsize: 20
-  download_batch_size: 5
+  download_list_maxsize: 100
+  download_batch_size: 10
 output:
-  output_dir: "output"
+  common_dir: "output"
+  samples_dir: "samples"
 auth:
   .ASPXAUTH:
   ASP.NET_SessionId:

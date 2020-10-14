@@ -1,3 +1,7 @@
+## Dev
+
+downloadRecords or downloadSamples are hardcoded and not in config. Sorry :)
+
 ## Usage
 
 Login to https://elib.spbstu.ru/ , see your .ASPXAUTH and ASP.NET_SessionId cookies and add values in config.yaml" (Pure implementation, we will develop normal authorization later :)

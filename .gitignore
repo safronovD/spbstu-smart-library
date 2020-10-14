@@ -1,1 +1,4 @@
-/connector/articles-descrp/output/
+/connector/output/
+/connector/bin/
+/connector/.ides/
+/connector/config.yaml
