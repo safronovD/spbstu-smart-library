@@ -1,17 +1,22 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v2"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 )
+
+const config_file = "config.yaml"
 
 type Record struct {
 	RecordIdentifier string `json:"recordIdentifier"`
@@ -25,6 +30,52 @@ type RecordsSuperList struct {
 	RList              RecordsList `json:"records"`
 	NumberOfRecords    int         `json:"numberOfRecords"`
 	NextRecordPosition int         `json:"nextRecordPosition"`
+}
+
+type Config struct {
+	Connection struct {
+		Url                 string `yaml:"url"`
+		DB                  string `yaml:"db"`
+		Query               string `yaml:"query"`
+		Fcq                 string `yaml:"fcq"`
+		DownloadListMaxsize int    `yaml:"download_list_maxsize"`
+		DownloadBatchSize   int    `yaml:"download_batch_size"`
+	} `yaml:"connection"`
+
+	Output struct {
+		OutputDir string `yaml:"output_dir"`
+	} `yaml:"output"`
+
+	Auth struct {
+		ASPXAUTH         string `yaml:".ASPXAUTH"`
+		ASPNET_SessionId string `yaml:"ASP.NET_SessionId"`
+	}
+}
+
+func NewConfig(configPath string) (*Config, error) {
+	s, err := os.Stat(configPath)
+	if err != nil {
+		return nil, err
+	}
+	if s.IsDir() {
+		return nil, fmt.Errorf("'%s' is a directory, not a normal file", configPath)
+	}
+
+	config := &Config{}
+
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	d := yaml.NewDecoder(file)
+
+	if err := d.Decode(&config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 /*func authorize(client *http.Client, name string, password string) http.Cookie {
@@ -59,7 +110,7 @@ func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path 
 
 	defer func() {
 		if recover() != nil {
-			fmt.Println("Failed to download " + url)
+			log.Println("Failed to download " + url)
 			os.Remove(path)
 		}
 	}()
@@ -84,7 +135,7 @@ func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path 
 	}
 
 	if rsp.StatusCode != http.StatusOK {
-		fmt.Println("Failed to download " + url + " Code: " + rsp.Status)
+		log.Println("Failed to download " + url + " Code: " + rsp.Status)
 		return
 	}
 
@@ -101,14 +152,14 @@ func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path 
 
 	file.Write(data)
 
-	fmt.Println(url + " downloaded")
+	log.Println(url + " downloaded")
 }
 
 func getHref(data []byte) string {
 
 	defer func() {
 		if recover() != nil {
-			fmt.Println("Failed to get href")
+			log.Println("Failed to get href")
 		}
 	}()
 
@@ -121,21 +172,23 @@ func getHref(data []byte) string {
 }
 
 func main() {
+	logFile, err := os.OpenFile("connector.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer logFile.Close()
 
-	db := "EBOOKS"
-	url := "https://ruslan.library.spbstu.ru/rrs-web/db/" + db
+	mw := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(mw)
 
-	reader := bufio.NewReader(os.Stdin)
+	config, err := NewConfig(config_file)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	fmt.Println("Login to https://elib.spbstu.ru/ and see your .ASPXAUTH and ASP.NET_SessionId cookies" +
-		"(Pure implementation, we will develop normal authorization later :) )")
-	fmt.Print(".ASPXAUTH: ")
-	aspxauth, _ := reader.ReadString('\n')
-	fmt.Print("ASP.NET_SessionId: ")
-	sessionId, _ := reader.ReadString('\n')
-
-	aspxauth = aspxauth[0:len(aspxauth) - 1]
-	sessionId = sessionId[0:len(sessionId) - 1]
+	url := config.Connection.Url + config.Connection.DB
+	aspxauth := config.Auth.ASPXAUTH
+	sessionId := config.Auth.ASPNET_SessionId
 
 	var cookies [2]http.Cookie
 	cookies[0] = http.Cookie{Name: ".ASPXAUTH", Value: aspxauth}
@@ -145,19 +198,24 @@ func main() {
 		Timeout: time.Second * 2, // Timeout after 2 seconds
 	}
 
-	os.Mkdir("./dir", os.ModePerm)
-	os.Mkdir("./dir/jsons", os.ModePerm)
-	os.Mkdir("./dir/pdfs", os.ModePerm)
+	commonPath := path.Join(".", config.Output.OutputDir)
+	jsonPath := path.Join(commonPath, "jsons")
+	pdfPath := path.Join(commonPath, "pdfs")
 
-	f, err := os.Create("./dir/ids.txt")
+	os.Mkdir(commonPath, os.ModePerm)
+	os.Mkdir(jsonPath, os.ModePerm)
+	os.Mkdir(pdfPath, os.ModePerm)
+
+	f, err := os.Create(path.Join(commonPath, "id_list.csv"))
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
 	n := 1
+	max_downloads := config.Connection.DownloadListMaxsize
 
-	for n < 20000 {
+	for n < max_downloads {
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -167,9 +225,11 @@ func main() {
 		req.Header.Set("Accept", "application/json")
 
 		q := req.URL.Query()
-		q.Add("query", "(dc.type=\"Academic thesis\") and (dc.language=rus)")
-		q.Add("fcq", "(bib.dateIssued = \"2018\")")
-		q.Add("maximumRecords", strconv.Itoa(10))
+		q.Add("query", config.Connection.Query)
+		if len(config.Connection.Fcq) != 0 {
+			q.Add("fcq", config.Connection.Fcq)
+		}
+		q.Add("maximumRecords", strconv.Itoa(config.Connection.DownloadBatchSize))
 		q.Add("startRecord", strconv.Itoa(n))
 
 		req.URL.RawQuery = q.Encode()
@@ -195,14 +255,18 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Println(rl.NextRecordPosition)
+		if rl.NumberOfRecords < max_downloads {
+			max_downloads = rl.NumberOfRecords
+		}
+		log.Println(fmt.Sprintf("Start to download [%d-%d]/%d", n-1, n-1+config.Connection.DownloadBatchSize, max_downloads))
 
 		for _, val := range rl.RList.Records {
+			//TODO: use "encoding/csv"
 			f.Write([]byte(strconv.Itoa(n)))
 			f.Write([]byte(","))
-			f.Write([]byte(val.RecordIdentifier + "\n"))
+			f.Write([]byte(val.RecordIdentifier))
 
-			jsonFile, err := os.Create("./dir/jsons/" + strconv.Itoa(n) + ".json")
+			jsonFile, err := os.Create(path.Join(jsonPath, strconv.Itoa(n)+".json"))
 			if err != nil {
 				panic(err)
 			}
@@ -222,21 +286,33 @@ func main() {
 
 			req.URL.RawQuery = q.Encode()
 
-			res, getErr := spaceClient.Do(req)
-			if getErr != nil {
-				log.Fatal(getErr)
+			res, err := spaceClient.Do(req)
+			if err != nil {
+				log.Println(err)
+				continue
 			}
 
 			if res.Body != nil {
 				defer res.Body.Close()
 			}
 
-			data, readErr := ioutil.ReadAll(res.Body)
-			if readErr != nil {
-				log.Fatal(readErr)
+			data, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				log.Println(err)
+				continue
+
 			}
 
-			jsonFile.Write(data)
+			//TODO: without double memory
+			var prettyJSON bytes.Buffer
+			err = json.Indent(&prettyJSON, data, "", "\t")
+			_, err = jsonFile.Write(prettyJSON.Bytes())
+			if err != nil {
+				log.Println(err)
+				os.Remove(jsonFile.Name())
+			} else {
+				log.Println(fmt.Sprintf("json file \"%s\" writed", jsonFile.Name()))
+			}
 
 			rl := RecordsSuperList{}
 
@@ -249,13 +325,19 @@ func main() {
 
 			if href != "" {
 				splitedHref := strings.Split(href, "/")
-				pdfName := splitedHref[len(splitedHref) - 1]
+				pdfName := splitedHref[len(splitedHref)-1]
 
-				downloadFile(&spaceClient, cookies, href + "/download", "./dir/pdfs/" + pdfName)
+				f.Write([]byte(","))
+				f.Write([]byte(pdfName + "\n"))
+
+				downloadFile(&spaceClient, cookies, href+"/download", path.Join(pdfPath, pdfName))
 			} else {
 				fmt.Println("Failed to get href")
 			}
+
 			n += 1
 		}
+
+		log.Println(fmt.Sprintf("Downloaded %d/%d", n-1, max_downloads))
 	}
 }

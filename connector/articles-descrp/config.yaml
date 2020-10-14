@@ -1,0 +1,12 @@
+connection:
+  url: "https://ruslan.library.spbstu.ru/rrs-web/db/"
+  db: "EBOOKS"
+  query: "(dc.type=\"Academic thesis\")and(dc.language=rus)"
+  fcq:
+  download_list_maxsize: 20
+  download_batch_size: 5
+output:
+  output_dir: "output"
+auth:
+  .ASPXAUTH:
+  ASP.NET_SessionId:
