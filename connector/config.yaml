@@ -1,13 +1,28 @@
-connection:
-  url: "https://ruslan.library.spbstu.ru/rrs-web/db/"
-  db: "EBOOKS"
-  query: "(dc.type=\"Academic thesis\")and(dc.language=rus)"
-  fcq:
-  download_list_maxsize: 100
-  download_batch_size: 10
-output:
-  common_dir: "output"
-  samples_dir: "samples"
-auth:
-  .ASPXAUTH:
-  ASP.NET_SessionId:
+json:
+  connection:
+    url: https://ruslan.library.spbstu.ru/rrs-web/db/
+    db: EBOOKS
+    query: "(dc.type=\"Academic thesis\")and(dc.language=rus)"
+    fcq: "(bib.dateIssued = \"2018\")"
+    download_list_maxsize: 100
+    download_batch_size: 10
+  output:
+    elasticsearch:
+      enable: false
+      host:
+      login:
+      pwd:
+      index:
+    filesystem:
+      enable: true
+      json_dir: jsons
+      records_dir: records
+      csv_file: records.csv
+
+pdf:
+  db: EBOOKS
+  dir: pdfs
+  csv_file: records.csv
+  auth:
+    .ASPXAUTH:
+    ASP.NET_SessionId:

@@ -9,7 +9,7 @@ build:
 	GOOS=linux go build -o ${BIN_DIR}/${NAME} ./src/*.go
 
 run: build
-	${BIN_DIR}/${NAME}
+	${BIN_DIR}/${NAME} ${flags}
 
 lint:
 	golangci-lint run ./...
