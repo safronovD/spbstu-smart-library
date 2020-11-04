@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"exec"
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
@@ -107,6 +107,24 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 					log.Println("Failed to load data to ES")
 				}
 			}()
+
+			//Poor logic, saving temporart to file to convert json. Change it later
+			file, err := os.OpenFile("./tmp.json", os.O_RDWR|os.O_CREATE, os.ModePerm) 
+			if err != nil {
+				log.Panic(err)
+			}
+			defer file.Close()
+			file.Write(jsonData)
+
+			cmd := exec.Command("../../lib/utils/json_convertor.py", "./tmp.json", "./res.json")
+			cmd.Run()
+			
+			convertedJson, err := ioutil.ReadFile("./res.json")
+			if err != nil {
+				log.Panic(err)
+			}
+
+			jsonData = convertedJson
 
 			rsp, err := es.Index(config.Output.Elasticsearch.Index, bytes.NewReader(jsonData))
 			if err != nil {
