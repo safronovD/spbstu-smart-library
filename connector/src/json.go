@@ -11,11 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"time"
-	"exec"
+
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
@@ -109,16 +110,11 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			}()
 
 			//Poor logic, saving temporart to file to convert json. Change it later
-			file, err := os.OpenFile("./tmp.json", os.O_RDWR|os.O_CREATE, os.ModePerm) 
-			if err != nil {
-				log.Panic(err)
-			}
-			defer file.Close()
-			file.Write(jsonData)
+			saveJson(jsonData, "./tmp1.json")
 
-			cmd := exec.Command("../../lib/utils/json_convertor.py", "./tmp.json", "./res.json")
+			cmd := exec.Command("python3", "../../lib/utils/json_convertor.py", "./tmp1.json", "./res.json")
 			cmd.Run()
-			
+
 			convertedJson, err := ioutil.ReadFile("./res.json")
 			if err != nil {
 				log.Panic(err)
