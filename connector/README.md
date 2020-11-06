@@ -1,16 +1,23 @@
-## Usage
+# Usage
 
+## Using Docker
+```ShellSession
+    docker build -t ssl-connector:runner . //from connector dir
+    docker run -it --name psl-connector psl-connector:runner
+```
+
+## Using Make with source files
 ```ShellSession
     make run flags="-launch-mod=download-pdf"
 ```
 
-Launch mods:
+## Launch mods:
 
 - download-json : load json data to Elasticsearch or filesystem with specified request
 - dowmload-pdf : load pdf files using hrefs from csv file (now after download-json)
 - samples : temp mod for dev
 
-Other options:
+## Other options:
 
 - -log-file=connector.log
 - -output-dir=output
