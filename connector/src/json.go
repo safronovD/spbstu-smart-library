@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 )
 
 type Record struct {
@@ -83,7 +85,9 @@ func downloadJson(client *http.Client, req *http.Request) ([]byte, error) {
 
 func downloadRecords(config *JsonConfig, outputDir string) {
 	saveToES := func(jsonData []byte, recordId string) {}
-	saveToFS := func(jsonData []byte, number int, recordId string) {}
+	saveToFS := func(jsonData []byte, recordId string) {}
+	saveCSV := func(jsonData []byte, recordId string) {}
+	convertJsonData := func(jsonData *[]byte) {}
 
 	if config.Output.Elasticsearch.Enable {
 		cfg := elasticsearch.Config{
@@ -102,6 +106,8 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 		log.Println(elasticsearch.Version)
 		log.Println(es.Info())
 
+		ctx := context.Background()
+
 		saveToES = func(jsonData []byte, recordId string) {
 			defer func() {
 				if err := recover(); err != nil {
@@ -109,26 +115,18 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 				}
 			}()
 
-			//Poor logic, saving temporart to file to convert json. Change it later
-			saveJson(jsonData, "./tmp1.json")
+			req := esapi.IndexRequest{
+				Index:      "some_index",
+				DocumentID: recordId,
+				Body:       bytes.NewReader(jsonData),
+				Refresh:    "true",
+			}
 
-			cmd := exec.Command("python3", "../../lib/utils/json_convertor.py", "./tmp1.json", "./res.json")
-			cmd.Run()
-
-			convertedJson, err := ioutil.ReadFile("./res.json")
+			res, err := req.Do(ctx, es)
 			if err != nil {
-				log.Panic(err)
+				log.Panicf("IndexRequest ERROR: %s", err)
 			}
-
-			jsonData = convertedJson
-
-			rsp, err := es.Index(config.Output.Elasticsearch.Index, bytes.NewReader(jsonData))
-			if err != nil {
-				log.Panic(err)
-			}
-			if rsp.StatusCode != http.StatusOK && rsp.StatusCode != http.StatusCreated {
-				log.Panic(errors.New("Failed to load data. " + " Code: " + rsp.Status()))
-			}
+			defer res.Body.Close()
 
 			log.Printf("Record with id \"%s\" send to ES.\n", recordId)
 		}
@@ -141,26 +139,47 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 		os.Mkdir(commonPath, os.ModePerm)
 		os.Mkdir(jsonPath, os.ModePerm)
 
-		csvFile, err := os.Create(path.Join(commonPath, config.Output.FileSystem.CsvFile))
-		if err != nil {
-			log.Panic(err)
+		saveToFS = func(jsonData []byte, recordId string) {
+			saveJson(jsonData, path.Join(jsonPath, recordId+".json"))
 		}
-		defer csvFile.Close()
+	}
 
-		csvWriter := csv.NewWriter(csvFile)
+	csvFile, err := os.Create(path.Join(outputDir, config.Output.FileSystem.CsvFile))
+	if err != nil {
+		log.Panic(err)
+	}
+	defer csvFile.Close()
 
-		saveToFS = func(jsonData []byte, number int, recordId string) {
-			splitedRId := strings.Split(recordId, "\\")
-			simpleId := splitedRId[len(splitedRId)-1]
-			csvLine := []string{strconv.Itoa(number), recordId, simpleId, getHref(jsonData)}
+	csvWriter := csv.NewWriter(csvFile)
 
-			csvWriter.Write(csvLine)
-			csvWriter.Flush()
-			if err := csvWriter.Error(); err != nil {
-				log.Printf("Failed to write \"%s\"\n", csvFile.Name())
+	saveCSV = func(jsonData []byte, recordId string) {
+		csvLine := []string{recordId, getHref(jsonData)}
+
+		csvWriter.Write(csvLine)
+		csvWriter.Flush()
+		if err := csvWriter.Error(); err != nil {
+			log.Printf("Failed to write \"%s\"\n", csvFile.Name())
+		}
+	}
+
+	if config.Output.ConvertEnable {
+		convertJsonData = func(jsonData *[]byte) {
+			//Poor logic, saving temporart to file to convert json. Change it later
+			saveJson(*jsonData, "./tmp1.json")
+
+			cmd := exec.Command("python3", "../lib/utils/json_convertor.py", "./tmp1.json", "./res.json")
+			err = cmd.Run()
+			if err != nil {
+				log.Println(err)
 			}
 
-			saveJson(jsonData, path.Join(jsonPath, simpleId+".json"))
+			convertedJson, err := ioutil.ReadFile("./res.json")
+			if err != nil {
+				log.Println(err)
+				log.Println("Json convert phase failed")
+			} else {
+				*jsonData = convertedJson
+			}
 		}
 	}
 
@@ -230,8 +249,13 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 				continue
 			}
 
-			saveToES(jsonData, val.RecordIdentifier)
-			saveToFS(jsonData, n, val.RecordIdentifier)
+			formattedId := strings.ReplaceAll(val.RecordIdentifier, "\\", "_")
+
+			convertJsonData(&jsonData)
+
+			saveToES(jsonData, formattedId)
+			saveToFS(jsonData, formattedId)
+			saveCSV(jsonData, formattedId)
 		}
 
 		log.Println(fmt.Sprintf("Downloaded %d/%d. Next record number is %d", n, maxDownloads, rl.NextRecordPosition))

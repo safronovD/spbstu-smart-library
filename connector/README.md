@@ -1,5 +1,13 @@
 # Usage
 
+## Dev
+
+!! In recordId "\\" is replaced with "_", cause it's not a valid file name (Example: ru\spstu\vkr\1000 -> ru_spstu_vkr_1000)
+
+output/*.csv contains list of IDs and links to pdf (for py scripts)
+
+getting href for pdf downloading isn't working with converted jsons
+
 ## Using Docker
 ```ShellSession
     docker build -t ssl-connector:runner . //from connector dir
