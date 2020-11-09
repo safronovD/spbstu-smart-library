@@ -22,6 +22,8 @@ type JsonConfig struct {
 	} `yaml:"connection"`
 
 	Output struct {
+		ConvertEnable bool `yaml:"convert_enable"`
+
 		Elasticsearch struct {
 			Enable bool   `yaml:"enable"`
 			Host   string `yaml:"host"`
@@ -80,7 +82,7 @@ func NewConfig(configPath string) (*Config, error) {
 }
 
 func main() {
-	launchMod := flag.String("launch-mod", "samples", "a string")
+	launchMod := flag.String("launch-mod", "download-json", "a string")
 	configFileName := flag.String("config-file", "config.yaml", "a string")
 	logFileName := flag.String("log-file", "connector.log", "a string")
 	outputDir := flag.String("output-dir", "output", "a string")
