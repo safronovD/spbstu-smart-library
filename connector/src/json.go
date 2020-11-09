@@ -116,15 +116,15 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			}()
 
 			req := esapi.IndexRequest{
-				Index:      "some_index",
+				Index:      config.Output.Elasticsearch.Index,
 				DocumentID: recordId,
 				Body:       bytes.NewReader(jsonData),
 				Refresh:    "true",
 			}
 
 			res, err := req.Do(ctx, es)
-			if err != nil {
-				log.Panicf("IndexRequest ERROR: %s", err)
+			if err != nil || res.StatusCode >= 300 || res.StatusCode < 200 {
+				log.Panicf("IndexRequest ERROR: %s, %s", err, res)
 			}
 			defer res.Body.Close()
 
@@ -167,7 +167,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			//Poor logic, saving temporart to file to convert json. Change it later
 			saveJson(*jsonData, "./tmp1.json")
 
-			cmd := exec.Command("python3", "../lib/utils/json_convertor.py", "./tmp1.json", "./res.json")
+			cmd := exec.Command("python3", "../../lib/utils/json_converter2.py", "./tmp1.json", "./res.json")
 			err = cmd.Run()
 			if err != nil {
 				log.Println(err)
