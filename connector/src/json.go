@@ -167,7 +167,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			//Poor logic, saving temporart to file to convert json. Change it later
 			saveJson(*jsonData, "./tmp1.json")
 
-			cmd := exec.Command("python3", "../../lib/utils/json_converter2.py", "./tmp1.json", "./res.json")
+			cmd := exec.Command("python3", "../../lib/utils/json_converter3.py", "./tmp1.json", "./res.json")
 			err = cmd.Run()
 			if err != nil {
 				log.Println(err)
@@ -184,7 +184,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 	}
 
 	httpClient := http.Client{
-		Timeout: time.Second * 2, // Timeout after 2 seconds
+		Timeout: time.Second * 60, // Timeout after 2 seconds
 	}
 	connectUrl := config.Connection.Url + config.Connection.DB
 
