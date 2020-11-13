@@ -71,7 +71,7 @@ func downloadPdfs(config *PdfConfig, outputDir string) {
 	os.Mkdir(pdfPath, os.ModePerm)
 
 	//TODO: Set in config full path to csv
-	csvFile, err := os.Open(path.Join(commonPath, config.CsvFile))
+	csvFile, err := os.Open(path.Join(outputDir, config.CsvFile))
 	if err != nil {
 		log.Panic(err)
 	}

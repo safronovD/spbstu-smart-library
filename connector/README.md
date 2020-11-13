@@ -10,13 +10,13 @@ getting href for pdf downloading isn't working with converted jsons
 
 ## Using Docker
 ```ShellSession
-    docker build -t ssl-connector:runner . //from connector dir
-    docker run -it --name psl-connector psl-connector:runner
+docker build -t ssl-connector:runner . //from connector dir
+docker run -it --name psl-connector psl-connector:runner
 ```
 
 ## Using Make with source files
 ```ShellSession
-    make run flags="-launch-mod=download-pdf"
+make run flags="-launch-mod=download-pdf"
 ```
 
 ## Launch mods:
@@ -34,6 +34,26 @@ getting href for pdf downloading isn't working with converted jsons
 Login to https://elib.spbstu.ru/ , see your .ASPXAUTH and ASP.NET_SessionId cookies and add values in config.yaml" (Pure implementation, we will develop normal authorization later :)
 
 For Firefox: F12 -> Storage -> Cookies
+
+## Elasticsearch setup
+
+```ShellSession
+sudo docker run -d --rm \
+    -p 9200:9200 -p 9300:9300 \
+    -e ELASTIC_USERNAME="" -e ELASTIC_PASSWORD="" \
+    -e "discovery.type=single-node" \
+    -e "xpack.security.enabled=true" \
+    --name elasticsearch \
+    docker.elastic.co/elasticsearch/elasticsearch:7.9.3
+
+sudo docker run -d --rm \
+    -p 5601:5601 \
+    -e ELASTICSEARCH_HOSTS="http://192.168.116.215:9200" \
+    -e ELASTICSEARCH_USERNAME="" -e ELASTICSEARCH_PASSWORD="" \
+    -e "xpack.security.enabled=true" \
+    --name kibana \
+    docker.elastic.co/kibana/kibana:7.9.3
+```
 
 ## Sample requests
 

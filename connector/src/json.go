@@ -20,6 +20,7 @@ import (
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 type Record struct {
@@ -183,9 +184,12 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 		}
 	}
 
-	httpClient := http.Client{
-		Timeout: time.Second * 60, // Timeout after 2 seconds
-	}
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = 5
+	retryClient.RetryWaitMin = 10 * time.Second
+	retryClient.RetryWaitMax = 30 * time.Second
+	httpClient := retryClient.StandardClient()
+
 	connectUrl := config.Connection.Url + config.Connection.DB
 
 	n := 0
@@ -209,7 +213,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 		q.Add("startRecord", strconv.Itoa(n+1))
 		req.URL.RawQuery = q.Encode()
 
-		data, err := downloadJson(&httpClient, req)
+		data, err := downloadJson(httpClient, req)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -243,7 +247,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			q.Add("recordSchema", "gost-7.0.100")
 			req.URL.RawQuery = q.Encode()
 
-			jsonData, err := downloadJson(&httpClient, req)
+			jsonData, err := downloadJson(httpClient, req)
 			if err != nil {
 				log.Println(err)
 				continue
