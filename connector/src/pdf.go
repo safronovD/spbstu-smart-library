@@ -20,6 +20,8 @@ func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path 
 		}
 	}()
 
+	url += "/download"
+
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Panic(err)
@@ -98,7 +100,7 @@ func downloadPdfs(config *PdfConfig, outputDir string) {
 			log.Panic(err)
 		}
 
-		downloadFile(&httpClient, cookies, record[3], path.Join(pdfPath, record[2]+".pdf"))
+		downloadFile(&httpClient, cookies, record[1], path.Join(pdfPath, record[0]+".pdf"))
 	}
 }
 
