@@ -2,3 +2,5 @@
 /connector/bin/
 /connector/.ides/
 /connector/config.yaml
+/build/output/
+/build/log.err

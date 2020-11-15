@@ -8,11 +8,12 @@ output/*.csv contains list of IDs and links to pdf (for py scripts)
 
 getting href for pdf downloading isn't working with converted jsons
 
-## Using Docker
-```ShellSession
-docker build -t ssl-connector:runner . //from connector dir
-docker run -it --name psl-connector psl-connector:runner
-```
+## Using Docker for building
+
+Go to build/ and run script build.sh
+Use arg "remote" for building from gitHub
+Error log -> log.err, output -> build/output
+
 
 ## Using Make with source files
 ```ShellSession
