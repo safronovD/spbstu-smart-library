@@ -1,5 +1,5 @@
 FROM golang:latest AS builder
-#RUN apt-get update -y && apt-get upgrade -y
+RUN apt-get update -y && apt-get upgrade -y
 WORKDIR /go/src/
 RUN git clone https://github.com/safronovD/spbstu-smart-library.git
 WORKDIR /go/src/spbstu-smart-library/connector/
@@ -7,11 +7,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/connector
 
 FROM alpine:latest AS runner
 RUN apk -U upgrade && apk add python3
-WORKDIR /go/connector/app/
-#TODO: Rewrite in one layer
-COPY --from=builder /go/bin/connector.app .
-COPY --from=builder /go/src/spbstu-smart-library/connector/config.yaml .
-#TODO: Remake dirs hierarchy -> change this bull
+WORKDIR /go/connector/app/  
+COPY --from=builder /go/bin/connector.app . 
+COPY --from=builder /go/src/spbstu-smart-library/connector/config.yaml . 
 COPY --from=builder /go/src/spbstu-smart-library/lib/utils/json_converter3.py ../../lib/utils/
-RUN ./connector.app
+
 
