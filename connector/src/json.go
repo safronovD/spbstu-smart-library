@@ -280,7 +280,7 @@ func getHref(data []byte) string {
 		log.Panic(err)
 	}
 
-	href := result["children"].([]interface{})[1].(map[string]interface{})["children"].([]interface{})[0].(map[string]interface{})["children"].([]interface{})[3].(map[string]interface{})["children"].([]interface{})[4].(map[string]interface{})["children"].([]interface{})[1].(map[string]interface{})["href"].(string)
+	href := result["pdfLink"].(string)
 
 	return href
 }
