@@ -147,6 +147,9 @@ try:
 except:
     pass
 
+for key in new_json_obj:
+    if new_json_obj[key] == "" or new_json_obj[key] == None:
+        new_json_obj[key] = "unknown"
 
 with open(sys.argv[2], 'w', encoding='utf-8') as f:
     f.write(json.dumps(new_json_obj, indent=2, ensure_ascii=False))
