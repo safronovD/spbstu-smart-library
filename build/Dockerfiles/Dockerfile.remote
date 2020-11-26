@@ -11,5 +11,5 @@ WORKDIR /go/connector/app/
 COPY --from=builder /go/bin/connector.app . 
 COPY --from=builder /go/src/spbstu-smart-library/connector/config.yaml . 
 COPY --from=builder /go/src/spbstu-smart-library/lib/utils/json_converter3.py ../../lib/utils/
-
+ENTRYPOINT [ "/go/connector/app/connector.app" ]
 

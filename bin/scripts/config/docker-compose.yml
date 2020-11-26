@@ -41,6 +41,22 @@ services:
     depends_on:
       - elasticsearch
 
+  dataloader:
+    build:
+      context: ../../../
+      dockerfile: ./build/Dockerfiles/Dockerfile.local
+    container_name: dataloader
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /go/connector/app/config.yaml
+        read_only: true
+    entrypoint: ["/go/connector/app/start.sh"]
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
 networks:
   elk:
     driver: bridge

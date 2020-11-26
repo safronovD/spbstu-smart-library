@@ -33,5 +33,5 @@ then
 fi
 echo -e "******\n CLEANING \n******"
 docker container rm -f dataLoader
-docker images -q -f dangling=true | xargs -I ARGS docker rmi -qf ARGS
+docker images -q -f dangling=true | xargs -I ARGS docker rmi -f ARGS
 

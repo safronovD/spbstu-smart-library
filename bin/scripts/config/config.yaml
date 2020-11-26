@@ -1,0 +1,29 @@
+json:
+  connection:
+    url: https://ruslan.library.spbstu.ru/rrs-web/db/
+    db: VKR
+    query: "(dc.type=*)"
+    fcq: ""
+    download_list_maxsize: 100
+    download_batch_size: 20
+  output:
+    convert_enable: true
+    elasticsearch:
+      enable: true
+      host: http://elasticsearch:9200
+      login: 
+      pwd:
+      index: new_data
+    filesystem:
+      enable: true
+      json_dir: jsons
+      records_dir: records
+      csv_file: records.csv
+
+pdf:
+  db: VKR
+  dir: pdfs
+  csv_file: records.csv
+  auth:
+    .ASPXAUTH:
+    ASP.NET_SessionId:

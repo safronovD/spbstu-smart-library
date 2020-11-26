@@ -8,5 +8,6 @@ FROM alpine:latest AS runner
 RUN apk -U upgrade && apk add python3
 WORKDIR /go/connector/app/
 COPY --from=builder /go/bin/connector.app .
-COPY --from=builder /go/src/connector/config.yaml .
+COPY --from=builder /go/src/lib/utils/waiting_for_es.sh ./start.sh
 COPY --from=builder /go/src/lib/utils/json_converter3.py ../../lib/utils/
+ENTRYPOINT [ "start.sh" ]
