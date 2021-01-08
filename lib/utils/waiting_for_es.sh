@@ -14,4 +14,3 @@ do
 done
 echo -e "\033[32mDone --- Connection successed"
 rm ./index.html
-./connector.app

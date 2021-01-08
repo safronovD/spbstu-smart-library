@@ -1,0 +1,7 @@
+{
+    "index-pattern": {
+        "title": "new_data",
+        "timeFieldName": "transactionDate",
+        "type": "index-pattern"
+    }
+}

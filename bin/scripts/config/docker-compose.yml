@@ -51,7 +51,7 @@ services:
         source: ./config.yaml
         target: /go/connector/app/config.yaml
         read_only: true
-    entrypoint: ["/go/connector/app/start.sh"]
+    entrypoint: ["/go/connector/app/utils/startup.sh"]
     networks:
       - elk
     depends_on:

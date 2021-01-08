@@ -12,6 +12,12 @@ def login(host, user=None, passw=None):
   session.headers.update({'Content-Type': 'application/json', 'kbn-xsrf': 'true'})
   return session
 
+def create_index_pattern(session, host):
+  json_file = './resources/new_index_pattern.json'
+  with open(json_file, 'r') as file:
+    index_json = json.load(file)
+    response = session.post(host + '/.kibana/_doc', json=index_json)
+    print(response.text)
 
 def import_graphs(session, host, json_files_list, index_pattern_name):
   response = session.get(host + '/api/saved_objects/_find?type=index-pattern&search_fields=title&search={}*'
@@ -50,4 +56,5 @@ if __name__ == "__main__":
     args.host = 'http:' + ip[0].split(':')[1] + ':5601'
   json_list = next(os.walk(os.getcwd()))[2]
   current_session = login(args.host)
+  create_index_pattern(current_session, args.host)
   import_graphs(current_session, args.host, json_list, 'new_data')

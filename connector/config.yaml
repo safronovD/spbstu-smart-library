@@ -3,8 +3,8 @@ json:
     url: https://ruslan.library.spbstu.ru/rrs-web/db/
     db: EBOOKS
     query: "(dc.type=\"Academic thesis\")and(dc.language=rus)"
-    fcq: "(bib.dateIssued = \"2018\")"
-    download_list_maxsize: 100
+    fcq: ""
+    download_list_maxsize: 20000
     download_batch_size: 10
   output:
     convert_enable: true
