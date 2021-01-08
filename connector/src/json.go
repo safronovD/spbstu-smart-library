@@ -168,7 +168,7 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			//Poor logic, saving temporart to file to convert json. Change it later
 			saveJson(*jsonData, "./tmp1.json")
 
-			cmd := exec.Command("python", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
+			cmd := exec.Command("python3", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
 			err = cmd.Run()
 			if err != nil {
 				log.Println(err)

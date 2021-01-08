@@ -1,11 +1,11 @@
 #!/bin/sh
 
 HOME_DIR=`pwd`
-UTILS_DIR="$HOME_DIR/lib/utils"
+UTILS_DIR="$HOME_DIR/utils"
 
-echo "Waiting for ES to be running"
+echo "Waiting for ES to be ready"
 cd $UTILS_DIR
-./wait_for_es.sh
+./waiting_for_es.sh
 
 echo "Downloading data"
 cd $HOME_DIR
