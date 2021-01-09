@@ -14,3 +14,5 @@ cd $HOME_DIR
 echo "Creating pattern and graphs"
 cd $UTILS_DIR
 python3 ./graphs_import.py
+
+echo "Data loading have compleated. You can close the proccess. (Ctrl+C)"
