@@ -5,9 +5,10 @@ WORKDIR /go/src/connector/
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/connector.app ./src/*.go
 
 FROM alpine:latest AS runner
-RUN apk -U upgrade && apk add python3
+RUN apk -U upgrade && apk add python3 && apk add py3-pip
 WORKDIR /go/connector/app/
+COPY ./requirements.txt .
+RUN pip3 install -r requirements.txt 
 COPY --from=builder /go/bin/connector.app .
-COPY --from=builder /go/src/lib/utils/waiting_for_es.sh ./start.sh
-COPY --from=builder /go/src/lib/utils/json_converter3.py ../../lib/utils/
-ENTRYPOINT [ "start.sh" ]
+COPY --from=builder /go/src/lib/ .
+ENTRYPOINT [ "./utils/startup.sh" ]

@@ -1,0 +1,6 @@
+{
+    "attributes": {
+        "title": "new_data",
+        "timeFieldName": "transactionDate"
+    }
+}

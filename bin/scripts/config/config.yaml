@@ -4,7 +4,7 @@ json:
     db: VKR
     query: "(dc.type=*)"
     fcq: ""
-    download_list_maxsize: 100
+    download_list_maxsize: 20000
     download_batch_size: 20
   output:
     convert_enable: true
