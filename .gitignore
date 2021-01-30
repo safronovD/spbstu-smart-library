@@ -3,5 +3,8 @@
 /connector/bin/
 /connector/.ides/
 /connector/config.yaml
+/connector/samples/
+/connector/go.sum
 /build/output/
 /build/log.err
+/.vagrant/

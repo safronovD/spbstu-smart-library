@@ -15,4 +15,6 @@ echo "Creating pattern and graphs"
 cd $UTILS_DIR
 python3 ./graphs_import.py
 
-echo "Data loading have compleated. You can close the proccess. (Ctrl+C)"
+echo "Data loading have compleated."
+echo "You can access application on 127.0.0.1:5601"
+echo "To finish application press Ctrl+C"
