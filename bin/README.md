@@ -11,7 +11,7 @@ If errors will be get - repeat this step
 2) Restart your pc
 3) test_start.bat - starting application on virtual machine
 
-You can acces application on printed access
+You can acces application on printed address
 Go Menu -> Kibana -> Visualize -> Choose set -> Configure timeline
 
 4) After working with application use Ctrl+C for stopping
