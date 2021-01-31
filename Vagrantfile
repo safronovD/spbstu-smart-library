@@ -25,7 +25,6 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "Starting application", type: "shell" do |sh|
     sh.inline = "cd /vagrant/bin/scripts/config;
-                 sudo docker login -u maxvale -p c1dd4464542bf943885cb09bbbb63155a8632576 docker.pkg.github.com;
                  sudo docker-compose up"
   end
 

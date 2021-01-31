@@ -42,7 +42,7 @@ services:
       - elasticsearch
 
   dataloader:
-    image: docker.pkg.github.com/safronovd/spbstu-smart-library/psl-connector:v0.1
+    image: maxvale/psl-connector:0.1
 #    build:
 #      context: ../../../
 #      dockerfile: ./build/Dockerfiles/Dockerfile.local
