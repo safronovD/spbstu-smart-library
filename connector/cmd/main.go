@@ -39,9 +39,9 @@ func main() {
 
 	switch *launchMod {
 	case "download-json":
-		pkg.DownloadRecords(&config.JSONConf, *outputDir)
+		pkg.DownloadRecords(&config.JSONConfig, *outputDir)
 	case "download-pdf":
-		pkg.DownloadPDFFiles(&config.PDFConf, *outputDir)
+		pkg.DownloadPDFFiles(&config.PDFConfig, *outputDir)
 	case "samples":
 		pkg.DownloadSamples(*outputDir)
 	default:

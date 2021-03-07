@@ -48,8 +48,8 @@ type PDFConfig struct {
 }
 
 type Config struct {
-	JSONConf JSONConfig `yaml:"json"`
-	PdfConf  PDFConfig  `yaml:"pdf"`
+	JSONConfig JSONConfig `yaml:"json"`
+	PDFConfig  PDFConfig  `yaml:"pdf"`
 }
 
 func NewConfig(configPath string) (*Config, error) {
