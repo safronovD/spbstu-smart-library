@@ -1,6 +1,6 @@
-module sbpstu-smart-library\connector
+module github.com/sbpstu-smart-library/connector
 
-go 1.14
+go 1.16
 
 require (
 	github.com/elastic/go-elasticsearch/v8 v8.0.0-20201104130540-2e1f801663c6

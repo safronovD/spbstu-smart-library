@@ -1,11 +1,10 @@
-package main
+package pkg
 
 import (
 	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -36,7 +35,7 @@ type RecordsList struct {
 	NextRecordPosition int `json:"nextRecordPosition"`
 }
 
-func saveJson(data []byte, path string) {
+func saveJSON(data []byte, path string) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Failed to save json")
@@ -50,8 +49,14 @@ func saveJson(data []byte, path string) {
 	defer jsonFile.Close()
 
 	var prettyJSON bytes.Buffer
+
 	err = json.Indent(&prettyJSON, data, "", "    ")
+	if err != nil {
+		log.Panic(err)
+	}
+
 	_, err = prettyJSON.WriteTo(jsonFile)
+
 	if err != nil {
 		os.Remove(jsonFile.Name())
 		log.Panic(err)
@@ -60,14 +65,14 @@ func saveJson(data []byte, path string) {
 	}
 }
 
-func downloadJson(client *http.Client, req *http.Request) ([]byte, error) {
+func downloadJSON(client *http.Client, req *http.Request) ([]byte, error) {
 	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
 	if (res.StatusCode != http.StatusOK) && (res.StatusCode != http.StatusMultiStatus) {
-		return nil, errors.New(fmt.Sprintf("Response failed: %s Status code: %d", res.Request.URL, res.StatusCode))
+		return nil, fmt.Errorf("Response failed: %s Status code: %d", res.Request.URL, res.StatusCode)
 	}
 
 	if res.Body != nil {
@@ -84,11 +89,11 @@ func downloadJson(client *http.Client, req *http.Request) ([]byte, error) {
 	return data, nil
 }
 
-func downloadRecords(config *JsonConfig, outputDir string) {
+func DownloadRecords(config *JSONConfig, outputDir string) {
 	saveToES := func(jsonData []byte, recordId string) {}
 	saveToFS := func(jsonData []byte, recordId string) {}
 	saveCSV := func(jsonData []byte, recordId string) {}
-	convertJsonData := func(jsonData *[]byte) {}
+	convertJSONData := func(jsonData *[]byte) {}
 
 	if config.Output.Elasticsearch.Enable {
 		cfg := elasticsearch.Config{
@@ -135,13 +140,18 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 
 	if config.Output.FileSystem.Enable {
 		commonPath := path.Join(".", outputDir, config.Connection.DB)
-		jsonPath := path.Join(commonPath, config.Output.FileSystem.JsonDir)
+		jsonPath := path.Join(commonPath, config.Output.FileSystem.JSONDir)
 
-		os.Mkdir(commonPath, os.ModePerm)
-		os.Mkdir(jsonPath, os.ModePerm)
+		if err := os.Mkdir(commonPath, os.ModePerm); err != nil {
+			log.Panic(err)
+		}
+
+		if err := os.Mkdir(jsonPath, os.ModePerm); err != nil {
+			log.Panic(err)
+		}
 
 		saveToFS = func(jsonData []byte, recordId string) {
-			saveJson(jsonData, path.Join(jsonPath, recordId+".json"))
+			saveJSON(jsonData, path.Join(jsonPath, recordId+".json"))
 		}
 	}
 
@@ -156,30 +166,34 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 	saveCSV = func(jsonData []byte, recordId string) {
 		csvLine := []string{recordId, getHref(jsonData)}
 
-		csvWriter.Write(csvLine)
+		if err := csvWriter.Write(csvLine); err != nil {
+			log.Printf("Failed to write \"%s\"\n", csvFile.Name())
+		}
+
 		csvWriter.Flush()
+
 		if err := csvWriter.Error(); err != nil {
 			log.Printf("Failed to write \"%s\"\n", csvFile.Name())
 		}
 	}
 
 	if config.Output.ConvertEnable {
-		convertJsonData = func(jsonData *[]byte) {
-			//Poor logic, saving temporart to file to convert json. Change it later
-			saveJson(*jsonData, "./tmp1.json")
+		convertJSONData = func(jsonData *[]byte) {
+			// Poor logic, saving temporart to file to convert json. Change it later
+			saveJSON(*jsonData, "./tmp1.json")
 
 			cmd := exec.Command("python3", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
-			err = cmd.Run()
-			if err != nil {
+
+			if err = cmd.Run(); err != nil {
 				log.Println(err)
 			}
 
-			convertedJson, err := ioutil.ReadFile("./res.json")
+			convertedJSON, err := ioutil.ReadFile("./res.json")
 			if err != nil {
 				log.Println(err)
 				log.Println("Json convert phase failed")
 			} else {
-				*jsonData = convertedJson
+				*jsonData = convertedJSON
 			}
 		}
 	}
@@ -190,14 +204,13 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 	retryClient.RetryWaitMax = 30 * time.Second
 	httpClient := retryClient.StandardClient()
 
-	connectUrl := config.Connection.Url + config.Connection.DB
+	connectURL := config.Connection.URL + config.Connection.DB
 
 	n := 0
 	maxDownloads := config.Connection.DownloadListMaxsize
 
 	for n < maxDownloads {
-
-		req, err := http.NewRequest(http.MethodGet, connectUrl, nil)
+		req, err := http.NewRequest(http.MethodGet, connectURL, nil)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -206,14 +219,16 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 
 		q := req.URL.Query()
 		q.Add("query", config.Connection.Query)
+
 		if len(config.Connection.Fcq) != 0 {
 			q.Add("fcq", config.Connection.Fcq)
 		}
+
 		q.Add("maximumRecords", strconv.Itoa(config.Connection.DownloadBatchSize))
 		q.Add("startRecord", strconv.Itoa(n+1))
 		req.URL.RawQuery = q.Encode()
 
-		data, err := downloadJson(httpClient, req)
+		data, err := downloadJSON(httpClient, req)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -232,11 +247,11 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 		log.Println(fmt.Sprintf("Start to download [%d-%d]/%d", n+1, n+len(rl.InnerRecordsList.Records), maxDownloads))
 
 		for _, val := range rl.InnerRecordsList.Records {
-			n += 1
+			n++
 
-			downloadUrl := connectUrl + "/" + url.PathEscape(val.RecordIdentifier)
+			downloadURL := connectURL + "/" + url.PathEscape(val.RecordIdentifier)
 
-			req, err := http.NewRequest(http.MethodGet, downloadUrl, nil)
+			req, err := http.NewRequest(http.MethodGet, downloadURL, nil)
 			if err != nil {
 				log.Panic(err)
 			}
@@ -247,19 +262,19 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 			q.Add("recordSchema", "gost-7.0.100")
 			req.URL.RawQuery = q.Encode()
 
-			jsonData, err := downloadJson(httpClient, req)
+			jsonData, err := downloadJSON(httpClient, req)
 			if err != nil {
 				log.Println(err)
 				continue
 			}
 
-			formattedId := strings.ReplaceAll(val.RecordIdentifier, "\\", "_")
+			formattedID := strings.ReplaceAll(val.RecordIdentifier, "\\", "_")
 
-			convertJsonData(&jsonData)
+			convertJSONData(&jsonData)
 
-			saveToES(jsonData, formattedId)
-			saveToFS(jsonData, formattedId)
-			saveCSV(jsonData, formattedId)
+			saveToES(jsonData, formattedID)
+			saveToFS(jsonData, formattedID)
+			saveCSV(jsonData, formattedID)
 		}
 
 		log.Println(fmt.Sprintf("Downloaded %d/%d. Next record number is %d", n, maxDownloads, rl.NextRecordPosition))
@@ -267,7 +282,6 @@ func downloadRecords(config *JsonConfig, outputDir string) {
 }
 
 func getHref(data []byte) string {
-
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("Failed to get href")
@@ -275,8 +289,8 @@ func getHref(data []byte) string {
 	}()
 
 	var result map[string]interface{}
-	err := json.Unmarshal(data, &result)
-	if err != nil {
+
+	if err := json.Unmarshal(data, &result); err != nil {
 		log.Panic(err)
 	}
 
