@@ -1,10 +1,10 @@
 @echo off
 
 set DIR=%~dp0%
-mkdir DIR\logs
+mkdir %DIR%\logs
 echo Starting application
 
-cd DIR\..\
+cd %DIR%\..\
 start vagrant up
 
 set /p check="Print [exit] when you done: "
