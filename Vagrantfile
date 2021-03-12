@@ -14,7 +14,8 @@ Vagrant.configure("2") do |config|
     sh.inline = "echo Boostrap process #################"
     sh.inline = "sudo yum install -y docker;
                  sudo systemctl start docker;
-                 sudo yum install -y python3"
+                 sudo yum install -y python3;
+                 sudo pip3 install --upgrade pip"
   end
 
   config.vm.provision "Configurating compose", type: "shell" do |sh|
