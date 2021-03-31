@@ -1,4 +1,4 @@
-package pkg
+package loader
 
 import (
 	"encoding/json"

@@ -1,4 +1,4 @@
-package pkg
+package loader
 
 import (
 	"encoding/csv"
@@ -10,6 +10,8 @@ import (
 	"os"
 	"path"
 	"time"
+
+	"git"
 )
 
 func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path string) {

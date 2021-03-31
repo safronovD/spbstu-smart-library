@@ -1,4 +1,4 @@
-package pkg
+package loader
 
 import (
 	"bytes"
@@ -142,10 +142,13 @@ func DownloadRecords(config *JSONConfig, outputDir string) {
 		commonPath := path.Join(".", outputDir, config.Connection.DB)
 		jsonPath := path.Join(commonPath, config.Output.FileSystem.JSONDir)
 
-		if err := os.Mkdir(commonPath, os.ModePerm); err != nil {
-			log.Panic(err)
+		if _, err := os.Stat(commonPath); os.IsNotExist(err) {
+			if err := os.Mkdir(commonPath, os.ModePerm); err != nil {
+				log.Panic(err)
+			}
 		}
 
+			if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
 		if err := os.Mkdir(jsonPath, os.ModePerm); err != nil {
 			log.Panic(err)
 		}
