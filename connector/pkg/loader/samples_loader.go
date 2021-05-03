@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/spbstu-smart-library/connector/pkg/persistent"
 )
 
 func DownloadSamples(outputDir string) {
@@ -35,7 +37,7 @@ func DownloadSamples(outputDir string) {
 		log.Panic(err)
 	}
 
-	saveJSON(data, path.Join(commonPath, "db_list"+".json"))
+	persistent.SaveJSON(data, path.Join(commonPath, "db_list"+".json"))
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
@@ -70,7 +72,7 @@ func DownloadSamples(outputDir string) {
 			log.Panic(err)
 		}
 
-		saveJSON(data, path.Join(dbPath, "db_index"+".json"))
+		persistent.SaveJSON(data, path.Join(dbPath, "db_index"+".json"))
 
 		req, err = http.NewRequest(http.MethodGet, href, nil)
 		if err != nil {
@@ -90,7 +92,7 @@ func DownloadSamples(outputDir string) {
 			log.Panic(err)
 		}
 
-		saveJSON(data, path.Join(dbPath, "db_records_list"+".json"))
+		persistent.SaveJSON(data, path.Join(dbPath, "db_records_list"+".json"))
 
 		rl := RecordsList{}
 
@@ -121,7 +123,7 @@ func DownloadSamples(outputDir string) {
 				continue
 			}
 
-			saveJSON(jsonData, path.Join(dbPath, "record"+strconv.Itoa(i)+".json"))
+			persistent.SaveJSON(jsonData, path.Join(dbPath, "record"+strconv.Itoa(i)+".json"))
 		}
 	}
 }

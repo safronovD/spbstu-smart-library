@@ -1,25 +1,22 @@
 package loader
 
 import (
-	"bytes"
-	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/hashicorp/go-retryablehttp"
+
+	"github.com/spbstu-smart-library/connector/pkg/config"
+	"github.com/spbstu-smart-library/connector/pkg/persistent"
 )
 
 type Record struct {
@@ -33,36 +30,6 @@ type RecordsList struct {
 
 	NumberOfRecords    int `json:"numberOfRecords"`
 	NextRecordPosition int `json:"nextRecordPosition"`
-}
-
-func saveJSON(data []byte, path string) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Failed to save json")
-		}
-	}()
-
-	jsonFile, err := os.Create(path)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer jsonFile.Close()
-
-	var prettyJSON bytes.Buffer
-
-	err = json.Indent(&prettyJSON, data, "", "    ")
-	if err != nil {
-		log.Panic(err)
-	}
-
-	_, err = prettyJSON.WriteTo(jsonFile)
-
-	if err != nil {
-		os.Remove(jsonFile.Name())
-		log.Panic(err)
-	} else {
-		log.Println(fmt.Sprintf("Json file \"%s\" saved", jsonFile.Name()))
-	}
 }
 
 func downloadJSON(client *http.Client, req *http.Request) ([]byte, error) {
@@ -89,116 +56,44 @@ func downloadJSON(client *http.Client, req *http.Request) ([]byte, error) {
 	return data, nil
 }
 
-func DownloadRecords(config *JSONConfig, outputDir string) {
-	saveToES := func(jsonData []byte, recordId string) {}
-	saveToFS := func(jsonData []byte, recordId string) {}
-	saveCSV := func(jsonData []byte, recordId string) {}
-	convertJSONData := func(jsonData *[]byte) {}
+func DownloadRecords(config *config.JSONConfig, outputDir string) {
+	var writers []persistent.Writer
 
 	if config.Output.Elasticsearch.Enable {
-		cfg := elasticsearch.Config{
-			Addresses: []string{
-				config.Output.Elasticsearch.Host,
-			},
-			Username: config.Output.Elasticsearch.Login,
-			Password: config.Output.Elasticsearch.Pwd,
-		}
-
-		es, err := elasticsearch.NewClient(cfg)
+		esConf := config.Output.Elasticsearch
+		esWriter, err := persistent.NewESWriter(esConf.Host, esConf.Login, esConf.Login, esConf.Index)
 		if err != nil {
-			log.Panic(err)
+			log.Printf("ES connection failed: %s", err)
+		} else {
+			writers = append(writers, esWriter)
 		}
+	}
 
-		log.Println(elasticsearch.Version)
-		log.Println(es.Info())
+	if config.Output.CsvFile.Enable {
+		csvWriter, err := persistent.NewCSVWriter(path.Join(outputDir, config.Output.CsvFile.FileName))
+		if err != nil {
+			log.Printf("CSV Writer failed: %s", err)
+		} else {
+			writers = append(writers, csvWriter)
+		}
+	}
 
-		ctx := context.Background()
-
-		saveToES = func(jsonData []byte, recordId string) {
-			defer func() {
-				if err := recover(); err != nil {
-					log.Println("Failed to load data to ES")
-				}
-			}()
-
-			req := esapi.IndexRequest{
-				Index:      config.Output.Elasticsearch.Index,
-				DocumentID: recordId,
-				Body:       bytes.NewReader(jsonData),
-				Refresh:    "true",
-			}
-
-			res, err := req.Do(ctx, es)
-			if err != nil || res.StatusCode >= 300 || res.StatusCode < 200 {
-				log.Panicf("IndexRequest ERROR: %s, %s", err, res)
-			}
-			defer res.Body.Close()
-
-			log.Printf("Record with id \"%s\" send to ES.\n", recordId)
+	if config.Output.CsvFile.Enable {
+		csvWriter, err := persistent.NewCSVWriter(path.Join(outputDir, config.Output.CsvFile.FileName))
+		if err != nil {
+			log.Printf("CSV Writer failed: %s", err)
+		} else {
+			writers = append(writers, csvWriter)
 		}
 	}
 
 	if config.Output.FileSystem.Enable {
-		commonPath := path.Join(".", outputDir, config.Connection.DB)
-		jsonPath := path.Join(commonPath, config.Output.FileSystem.JSONDir)
-
-		if _, err := os.Stat(commonPath); os.IsNotExist(err) {
-			if err := os.Mkdir(commonPath, os.ModePerm); err != nil {
-				log.Panic(err)
-			}
-		}
-
-			if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
-		if err := os.Mkdir(jsonPath, os.ModePerm); err != nil {
-			log.Panic(err)
-		}
-
-		saveToFS = func(jsonData []byte, recordId string) {
-			saveJSON(jsonData, path.Join(jsonPath, recordId+".json"))
-		}
-	}
-
-	csvFile, err := os.Create(path.Join(outputDir, config.Output.FileSystem.CsvFile))
-	if err != nil {
-		log.Panic(err)
-	}
-	defer csvFile.Close()
-
-	csvWriter := csv.NewWriter(csvFile)
-
-	saveCSV = func(jsonData []byte, recordId string) {
-		csvLine := []string{recordId, getHref(jsonData)}
-
-		if err := csvWriter.Write(csvLine); err != nil {
-			log.Printf("Failed to write \"%s\"\n", csvFile.Name())
-		}
-
-		csvWriter.Flush()
-
-		if err := csvWriter.Error(); err != nil {
-			log.Printf("Failed to write \"%s\"\n", csvFile.Name())
-		}
+		fsWriter := persistent.NewFileSystemWriter(path.Join(outputDir, config.Output.FileSystem.JSONDir))
+		writers = append(writers, fsWriter)
 	}
 
 	if config.Output.ConvertEnable {
-		convertJSONData = func(jsonData *[]byte) {
-			// Poor logic, saving temporart to file to convert json. Change it later
-			saveJSON(*jsonData, "./tmp1.json")
 
-			cmd := exec.Command("python3", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
-
-			if err = cmd.Run(); err != nil {
-				log.Println(err)
-			}
-
-			convertedJSON, err := ioutil.ReadFile("./res.json")
-			if err != nil {
-				log.Println(err)
-				log.Println("Json convert phase failed")
-			} else {
-				*jsonData = convertedJSON
-			}
-		}
 	}
 
 	retryClient := retryablehttp.NewClient()
@@ -271,33 +166,46 @@ func DownloadRecords(config *JSONConfig, outputDir string) {
 				continue
 			}
 
-			formattedID := strings.ReplaceAll(val.RecordIdentifier, "\\", "_")
+			formattedID := formatID(val.RecordIdentifier)
 
-			convertJSONData(&jsonData)
+			if config.Output.ConvertEnable {
+				convertedJSON, err := convertJSONData(jsonData)
+				if err != nil {
+					log.Printf("JSON converted failed: %s", err)
+				} else {
+					jsonData = convertedJSON
+				}
+			}
 
-			saveToES(jsonData, formattedID)
-			saveToFS(jsonData, formattedID)
-			saveCSV(jsonData, formattedID)
+			for _, w := range writers {
+				w.Write(jsonData, formattedID)
+			}
 		}
 
-		log.Println(fmt.Sprintf("Downloaded %d/%d. Next record number is %d", n, maxDownloads, rl.NextRecordPosition))
+		log.Printf(fmt.Sprintf("Downloaded %d/%d. Next record number is %d", n, maxDownloads, rl.NextRecordPosition))
 	}
 }
 
-func getHref(data []byte) string {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Failed to get href")
-		}
-	}()
+func formatID(id string) string {
+	return strings.ReplaceAll(id, "\\", "_")
+}
 
-	var result map[string]interface{}
-
-	if err := json.Unmarshal(data, &result); err != nil {
-		log.Panic(err)
+// TODO refactor with Golang
+func convertJSONData(jsonData []byte) ([]byte, error) {
+	err := persistent.SaveJSON(jsonData, "./tmp1.json")
+	if err != nil {
+		return nil, err
 	}
 
-	href := result["pdfLink"].(string)
+	cmd := exec.Command("python3", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
+	if err = cmd.Run(); err != nil {
+		return nil, err
+	}
 
-	return href
+	convertedJSON, err := ioutil.ReadFile("./res.json")
+	if err != nil {
+		return nil, err
+	}
+
+	return convertedJSON, nil
 }

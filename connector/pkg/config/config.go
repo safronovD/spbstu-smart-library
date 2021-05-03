@@ -31,8 +31,12 @@ type JSONConfig struct {
 		FileSystem struct {
 			Enable  bool   `yaml:"enable"`
 			JSONDir string `yaml:"json_dir"`
-			CsvFile string `yaml:"csv_file"`
 		} `yaml:"filesystem"`
+
+		CsvFile struct {
+			Enable   bool   `yaml:"enable"`
+			FileName string `yaml:"file_name"`
+		} `yaml:"csv_file"`
 	} `yaml:"output"`
 }
 

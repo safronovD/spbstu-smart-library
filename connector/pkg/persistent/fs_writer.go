@@ -19,12 +19,12 @@ func NewFileSystemWriter(jsonPath string) *FileSystemWriter {
 }
 
 func (w *FileSystemWriter) Write(jsonData []byte, recordId string) {
-	if err := saveJSON(jsonData, path.Join(w.jsonPath, recordId+".json")); err != nil {
+	if err := SaveJSON(jsonData, path.Join(w.jsonPath, recordId+".json")); err != nil {
 		log.Printf("Failed to save json with err: %s", err)
 	}
 }
 
-func saveJSON(data []byte, path string) error {
+func SaveJSON(data []byte, path string) error {
 	jsonFile, err := os.Create(path)
 	if err != nil {
 		return err

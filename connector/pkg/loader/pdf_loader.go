@@ -11,7 +11,7 @@ import (
 	"path"
 	"time"
 
-	"git"
+	"github.com/spbstu-smart-library/connector/pkg/config"
 )
 
 func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path string) {
@@ -66,7 +66,7 @@ func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path 
 	log.Println(url + " downloaded")
 }
 
-func DownloadPDFFiles(config *PDFConfig, outputDir string) {
+func DownloadPDFFiles(config *config.PDFConfig, outputDir string) {
 	commonPath := path.Join(".", outputDir, config.DB)
 	pdfPath := path.Join(commonPath, config.Dir)
 
