@@ -3,17 +3,13 @@ package persistent
 import (
 	"encoding/json"
 	"io/ioutil"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	json_path = "/tmp/test.json"
-	json_dir  = "/tmp/json"
-)
-
-type TestStruct struct {
+type TestStructJSON struct {
 	Field1 string   `json:"field1"`
 	Field2 int      `json:"field2"`
 	Field3 bool     `json:"field3"`
@@ -21,6 +17,10 @@ type TestStruct struct {
 }
 
 func TestSaveJSON(t *testing.T) {
+	const (
+		jsonPath = "/tmp/test.json"
+	)
+
 	// Create Test struct and set some fields
 	testStruct := createTestStruct()
 
@@ -28,24 +28,52 @@ func TestSaveJSON(t *testing.T) {
 	jsonData, err := json.Marshal(testStruct)
 	assert.Nil(t, err)
 
-	err = SaveJSON(jsonData, json_path)
+	err = SaveJSON(jsonData, jsonPath)
 	assert.Nil(t, err)
 
 	// Read data from file and check that structures are the same
-	readTestStruct, err := readTestStruct(json_path)
+	readTestStruct, err := readTestStruct(jsonPath)
 	assert.Nil(t, err)
 	assert.Equal(t, testStruct, readTestStruct)
 }
 
 func TestNewFileSystemWriter(t *testing.T) {
-	fsw1 := NewFileSystemWriter(json_dir)
-	fsw2 := NewFileSystemWriter(json_dir)
+	const (
+		jsonDir = "/tmp/json"
+	)
+
+	fsw1 := NewFileSystemWriter(jsonDir)
+	fsw2 := NewFileSystemWriter(jsonDir)
 
 	assert.Equal(t, fsw1, fsw2)
 }
 
-func createTestStruct() *TestStruct {
-	return &TestStruct{
+func TestFileSystemWriter_Write(t *testing.T) {
+	const (
+		jsonDir  = "/tmp/json"
+		jsonId   = "id"
+		jsonFile = jsonId + ".json"
+	)
+
+	// Create Test struct and set some fields
+	testStruct := createTestStruct()
+
+	// Write data to file
+	jsonData, err := json.Marshal(testStruct)
+	assert.Nil(t, err)
+
+	fsw := NewFileSystemWriter(jsonDir)
+	fsw.Write(jsonData, jsonId)
+
+	// Read data from file and check that structures are the same
+	fswJsonPath := path.Join(jsonDir, jsonFile)
+	readTestStruct, err := readTestStruct(fswJsonPath)
+	assert.Nil(t, err)
+	assert.Equal(t, testStruct, readTestStruct)
+}
+
+func createTestStruct() *TestStructJSON {
+	return &TestStructJSON{
 		Field1: "string",
 		Field2: 23,
 		Field3: true,
@@ -53,13 +81,13 @@ func createTestStruct() *TestStruct {
 	}
 }
 
-func readTestStruct(path string) (*TestStruct, error) {
+func readTestStruct(path string) (*TestStructJSON, error) {
 	readData, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	readTestStruct := &TestStruct{}
+	readTestStruct := &TestStructJSON{}
 	if err = json.Unmarshal(readData, readTestStruct); err != nil {
 		return nil, err
 	}

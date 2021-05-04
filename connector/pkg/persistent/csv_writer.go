@@ -3,6 +3,7 @@ package persistent
 import (
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 )
@@ -32,7 +33,15 @@ func (w *CSVWriter) Write(jsonData []byte, recordId string) {
 }
 
 func (w *CSVWriter) saveCSV(jsonData []byte, recordId string) error {
-	csvLine := []string{recordId, getHref(jsonData)}
+	var href string
+	if recognizedHref, err := getHref(jsonData); err != nil {
+		log.Printf("Failed to get pdf href: %s", err)
+		href = "###Pdf Link not found###"
+	} else {
+		href = recognizedHref
+	}
+
+	csvLine := []string{recordId, href}
 
 	if err := w.csvWriter.Write(csvLine); err != nil {
 		return err
@@ -47,21 +56,17 @@ func (w *CSVWriter) saveCSV(jsonData []byte, recordId string) error {
 	return nil
 }
 
-func getHref(data []byte) string {
-
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Failed to get href")
-		}
-	}()
-
+func getHref(data []byte) (string, error) {
 	var result map[string]interface{}
+
 	err := json.Unmarshal(data, &result)
 	if err != nil {
-		log.Panic(err)
+		return "", err
 	}
 
-	href := result["pdfLink"].(string)
+	if href, ok := result["pdfLink"].(string); ok {
+		return href, nil
+	}
 
-	return href
+	return "", errors.New("uncorrected JSON data")
 }
