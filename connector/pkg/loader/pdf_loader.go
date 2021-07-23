@@ -3,7 +3,6 @@ package loader
 import (
 	"encoding/csv"
 	"errors"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,99 +13,114 @@ import (
 	"github.com/spbstu-smart-library/connector/pkg/config"
 )
 
-func downloadFile(client *http.Client, cookies [2]http.Cookie, url string, path string) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Println("Failed to download " + url)
-		}
-	}()
+type PDFLoader struct {
+	csvPath string
+	pdfDir  string
+	cookies [2]http.Cookie
 
-	url += "/download"
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	for i := range cookies {
-		req.AddCookie(&cookies[i])
-	}
-
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, bt")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Connection", "keep-alive")
-
-	rsp, err := client.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	defer rsp.Body.Close()
-
-	if rsp.StatusCode != http.StatusOK {
-		log.Panic(errors.New("Failed to GET " + url + " Code: " + rsp.Status))
-	}
-
-	file, err := os.Create(path)
-	if err != nil {
-		log.Panic(err)
-	}
-	defer file.Close()
-
-	data, err := ioutil.ReadAll(rsp.Body)
-	if err != nil {
-		os.Remove(path)
-		log.Panic(err)
-	}
-
-	if _, err := file.Write(data); err != nil {
-		log.Println("Write failed")
-	}
-
-	log.Println(url + " downloaded")
+	client http.Client
 }
 
-func DownloadPDFFiles(config *config.PDFConfig, outputDir string) {
-	commonPath := path.Join(".", outputDir, config.DB)
-	pdfPath := path.Join(commonPath, config.Dir)
+func NewPDFLoader(pdfConfig *config.PDFConfig, outputDir string) *PDFLoader {
+	csvpath, pdfdir := configureDirs(pdfConfig, outputDir)
+	cookies := createCookies(pdfConfig)
+	client := http.Client{Timeout: time.Second * 60}
+	return &PDFLoader{csvPath: csvpath, pdfDir: pdfdir, cookies: cookies, client: client}
+}
 
-	if _, err := os.Stat(commonPath); err != nil {
+func (l *PDFLoader) Download() {
+	csvfile, err := os.Open(l.csvPath)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer csvfile.Close()
+
+	reader := csv.NewReader(csvfile)
+	recordList, err := reader.ReadAll()
+	if err != nil {
 		log.Panic(err)
 	}
 
+	for _, record := range recordList {
+		err := l.downloadRecord(record[1], path.Join(l.pdfDir, record[0]+".pdf"))
+		if err != nil {
+			log.Print(err)
+		}
+	}
+}
+
+func (l *PDFLoader) downloadRecord(url string, fileName string) error {
+	request, err := l.createRequest(url)
+	if err != nil {
+		return err
+	}
+
+	response, err := l.client.Do(request)
+	if err != nil {
+		return err
+	}
+	if response.StatusCode != http.StatusOK {
+		return errors.New("Failed to GET " + url + " - Status code: " + response.Status)
+	}
+
+	err = writeResponse(response, fileName)
+	if err != nil {
+		return err
+	}
+	log.Printf("%v dowloaded", url)
+	return nil
+}
+
+func (l *PDFLoader) createRequest(url string) (*http.Request, error) {
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cookie := range l.cookies {
+		request.AddCookie(&cookie)
+	}
+	//TODO: Check ACCEPT header for minimize ready-to-get formats
+	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	request.Header.Set("Accept-Encoding", "gzip, deflate, bt")
+	request.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	request.Header.Set("Connection", "keep-alive")
+	return request, nil
+}
+
+func configureDirs(pdfConfig *config.PDFConfig, outputDir string) (string, string) {
+	pdfPath := path.Join(".", outputDir, pdfConfig.DB, pdfConfig.Dir)
 	if err := os.Mkdir(pdfPath, os.ModePerm); err != nil {
 		log.Panic(err)
 	}
+	csvPath := path.Join(".", outputDir, pdfConfig.CsvFile)
 
-	//TODO: Set in config full path to csv
-	csvFile, err := os.Open(path.Join(outputDir, config.CsvFile))
+	return pdfPath, csvPath
+}
+
+func createCookies(pdfConfig *config.PDFConfig) [2]http.Cookie {
+	aspxauth := http.Cookie{Name: ".ASPXAUTH", Value: pdfConfig.Auth.ASPXAUTH}
+	sessionID := http.Cookie{Name: "ASP.NET_SessionId", Value: pdfConfig.Auth.ASPNETSessionID}
+
+	return [2]http.Cookie{aspxauth, sessionID}
+}
+
+func writeResponse(response *http.Response, fileName string) error {
+	file, err := os.Create(fileName)
 	if err != nil {
-		log.Panic(err)
+		return err
 	}
-	defer csvFile.Close()
-	csvReader := csv.NewReader(csvFile)
+	defer file.Close()
 
-	httpClient := http.Client{
-		Timeout: time.Second * 60, // Timeout after 2 seconds
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		os.Remove(fileName)
+		return err
 	}
 
-	aspxauth := config.Auth.ASPXAUTH
-	sessionID := config.Auth.ASPNETSessionID
-
-	var cookies [2]http.Cookie
-	cookies[0] = http.Cookie{Name: ".ASPXAUTH", Value: aspxauth}
-	cookies[1] = http.Cookie{Name: "ASP.NET_SessionId", Value: sessionID}
-
-	for {
-		record, err := csvReader.Read()
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			log.Panic(err)
-		}
-
-		downloadFile(&httpClient, cookies, record[1], path.Join(pdfPath, record[0]+".pdf"))
+	_, err = file.Write(data)
+	if err != nil {
+		return err
 	}
+	return nil
 }
