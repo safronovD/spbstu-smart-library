@@ -21,11 +21,14 @@ type PDFLoader struct {
 	client http.Client
 }
 
-func NewPDFLoader(pdfConfig *config.PDFConfig, outputDir string) *PDFLoader {
-	csvpath, pdfdir := configureDirs(pdfConfig, outputDir)
+func NewPDFLoader(pdfConfig *config.PDFConfig, outputDir string) (*PDFLoader, error) {
+	csvpath, pdfdir, err := configureDirs(pdfConfig, outputDir)
+	if err != nil {
+		return nil, err
+	}
 	cookies := createCookies(pdfConfig)
 	client := http.Client{Timeout: time.Second * 60}
-	return &PDFLoader{csvPath: csvpath, pdfDir: pdfdir, cookies: cookies, client: client}
+	return &PDFLoader{csvPath: csvpath, pdfDir: pdfdir, cookies: cookies, client: client}, nil
 }
 
 func (l *PDFLoader) Download() {
@@ -88,14 +91,14 @@ func (l *PDFLoader) createRequest(url string) (*http.Request, error) {
 	return request, nil
 }
 
-func configureDirs(pdfConfig *config.PDFConfig, outputDir string) (string, string) {
+func configureDirs(pdfConfig *config.PDFConfig, outputDir string) (string, string, error) {
 	pdfPath := path.Join(".", outputDir, pdfConfig.DB, pdfConfig.Dir)
 	if err := os.Mkdir(pdfPath, os.ModePerm); err != nil {
-		log.Panic(err)
+		return "", "", err
 	}
 	csvPath := path.Join(".", outputDir, pdfConfig.CsvFile)
 
-	return pdfPath, csvPath
+	return pdfPath, csvPath, nil
 }
 
 func createCookies(pdfConfig *config.PDFConfig) [2]http.Cookie {
@@ -106,17 +109,16 @@ func createCookies(pdfConfig *config.PDFConfig) [2]http.Cookie {
 }
 
 func writeResponse(response *http.Response, fileName string) error {
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
 	file, err := os.Create(fileName)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-
-	data, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		os.Remove(fileName)
-		return err
-	}
 
 	_, err = file.Write(data)
 	if err != nil {
