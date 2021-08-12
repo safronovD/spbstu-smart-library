@@ -7,19 +7,19 @@ import (
 	"os"
 )
 
-type jsonConverter struct {
+type JsonConverter struct {
 	filler *jsonFiller
 	parser *jsonParser
 }
 
-func NewJsonConverter() *jsonConverter {
-	return &jsonConverter{
+func NewJsonConverter() *JsonConverter {
+	return &JsonConverter{
 		filler: NewJsonFiller(),
 		parser: NewJsonParser(),
 	}
 }
 
-func (c *jsonConverter) Convert(schema string, jsonPath string, newJsonPath string) error {
+func (c *JsonConverter) Convert(schema string, jsonPath string, newJsonPath string) error {
 	data, err := readJson(jsonPath)
 	if err != nil {
 		return err
