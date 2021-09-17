@@ -18,7 +18,8 @@ type JSONConfig struct {
 	} `yaml:"connection"`
 
 	Output struct {
-		ConvertEnable bool `yaml:"convert_enable"`
+		ConvertEnable bool   `yaml:"convert_enable"`
+		ConvertSchema string `yaml:"convert_schema"`
 
 		Elasticsearch struct {
 			Enable bool   `yaml:"enable"`

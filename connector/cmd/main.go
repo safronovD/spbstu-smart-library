@@ -35,16 +35,22 @@ func main() {
 	mw := io.MultiWriter(os.Stdout, logFile)
 	log.SetOutput(mw)
 
-	config, err := config.NewConfig(*configFileName)
+	conf, err := config.NewConfig(*configFileName)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	JSONLoader := loader.NewJsonLoader(&conf.JSONConfig, *outputDir)
+	PDFLoader, err := loader.NewPDFLoader(&conf.PDFConfig, *outputDir)
 	if err != nil {
 		log.Panic(err)
 	}
 
 	switch *launchMod {
 	case "download-json":
-		loader.DownloadRecords(&config.JSONConfig, *outputDir)
+		JSONLoader.Download()
 	case "download-pdf":
-		loader.DownloadPDFFiles(&config.PDFConfig, *outputDir)
+		PDFLoader.Download()
 	case "samples":
 		loader.DownloadSamples(*outputDir)
 	default:

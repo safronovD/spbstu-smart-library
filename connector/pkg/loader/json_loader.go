@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
@@ -38,6 +37,7 @@ type JsonLoader struct {
 	Configuration    *config.JSONConfig
 	Writers          []persistent.Writer
 	Converter        *converter.JsonConverter
+	schema           string
 }
 
 func NewJsonLoader(config *config.JSONConfig, outputDirs string) *JsonLoader {
@@ -47,6 +47,10 @@ func NewJsonLoader(config *config.JSONConfig, outputDirs string) *JsonLoader {
 
 	if config.Output.ConvertEnable {
 		loader.Converter = converter.NewJsonConverter()
+		loader.schema = config.Output.ConvertSchema
+		if loader.schema == "" {
+			loader.Converter = nil
+		}
 	}
 
 	loader.configureWriters(config, outputDirs)
@@ -78,6 +82,14 @@ func (l *JsonLoader) Download() {
 			if err != nil {
 				log.Println(err)
 				continue
+			}
+
+			if l.Configuration.Output.ConvertEnable && l.Converter != nil {
+				convertedJSON, err := l.convertJson(jsonData, l.schema)
+				if err != nil {
+					log.Printf("JSON converted failed: %s", err)
+				}
+				jsonData = convertedJSON
 			}
 
 			for _, w := range l.Writers {
@@ -118,16 +130,6 @@ func (l *JsonLoader) downloadDataRecord(httpClient *http.Client, JsonURL string)
 	if err != nil {
 		return nil, err
 	}
-	schema := "author, links"
-
-	if l.Configuration.Output.ConvertEnable {
-		convertedJSON, err := l.convertJson(jsonData, schema)
-		if err != nil {
-			log.Printf("JSON converted failed: %s", err)
-			return jsonData, nil
-		}
-		jsonData = convertedJSON
-	}
 	return jsonData, nil
 }
 
@@ -167,8 +169,11 @@ func (l *JsonLoader) createRecordRequest(recordURL string) (*http.Request, error
 }
 
 func (l *JsonLoader) convertJson(jsonData []byte, schema string) ([]byte, error) {
-
-	return nil, nil
+	convertedData, err := l.Converter.Convert(schema, string(jsonData))
+	if err != nil {
+		return jsonData, err
+	}
+	return convertedData, nil
 }
 
 func (l *JsonLoader) configureWriters(config *config.JSONConfig, outputDir string) {
@@ -231,23 +236,4 @@ func downloadJsonFile(client *http.Client, req *http.Request) ([]byte, error) {
 
 func formatID(id string) string {
 	return strings.ReplaceAll(id, "\\", "_")
-}
-
-func convertJSONData(jsonData []byte) ([]byte, error) {
-	err := persistent.SaveJSON(jsonData, "./tmp1.json")
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := exec.Command("python3", "./utils/json_converter3.py", "./tmp1.json", "./res.json")
-	if err = cmd.Run(); err != nil {
-		return nil, err
-	}
-
-	convertedJSON, err := ioutil.ReadFile("./res.json")
-	if err != nil {
-		return nil, err
-	}
-
-	return convertedJSON, nil
 }
